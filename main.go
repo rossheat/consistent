@@ -57,18 +57,20 @@ func InitialModel() Model {
 	return Model{Err: nil, TextInput: ti, Route: QuestionRoute, Spinner: s}
 }
 
-func (m Model) CheckEnvVars() tea.Msg {
+type AnthropicAPIKey struct {
+	value string
+}
 
-	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
-	if anthropicAPIKey == "" {
-		return fmt.Errorf("Missing ANTHROPIC_API_KEY environment variable.\nPlease set it in your shell this this: ANTHROPIC_API_KEY=<value>")
+func (m *Model) LoadEnvVars() tea.Msg {
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("missing ANTHROPIC_API_KEY environment variable.\nPlease set it in your shell like this: ANTHROPIC_API_KEY=<value>")
 	}
-	m.AnthropicAPIKey = anthropicAPIKey
-	return nil
+	return AnthropicAPIKey{apiKey}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.CheckEnvVars, m.Spinner.Tick, textinput.Blink)
+	return tea.Batch(m.LoadEnvVars, m.Spinner.Tick, textinput.Blink)
 }
 
 type LLMResults struct {
@@ -98,6 +100,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LLMResults:
 		m.LLMResults = msg
 		m.Route = ResultsRoute
+		return m, nil
+
+	case AnthropicAPIKey:
+		m.AnthropicAPIKey = msg.value
 		return m, nil
 
 	case tea.KeyMsg:
@@ -171,7 +177,7 @@ func (m Model) ResultsView() string {
 	bc.PushAll([]barchart.BarData{d1, d2})
 	bc.Draw()
 
-	return fmt.Sprint("\n", m.TextInput.Value(), "\n\n", bc.View(), "\n\n", "(r to reset, q to quit)")
+	return fmt.Sprint(m.AnthropicAPIKey, "\n", m.TextInput.Value(), "\n\n", bc.View(), "\n\n", "(r to reset, q to quit)")
 }
 
 func (m Model) ErrorView() string {
