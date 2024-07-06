@@ -13,6 +13,7 @@ type ErrMsg error
 type Model struct {
 	TextInput textinput.Model
 	Err       error
+	Question  string
 }
 
 func InitialModel() Model {
@@ -26,7 +27,7 @@ func InitialModel() Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -38,6 +39,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
+		case tea.KeyEnter:
+
 		}
 
 	case ErrMsg:
