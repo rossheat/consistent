@@ -10,10 +10,28 @@ import (
 
 type ErrMsg error
 
+type Screen int
+
+const (
+	QuestionScreen = iota
+	LoadingScreen
+	ResultsScreen
+)
+
+var screenName = map[Screen]string{
+	QuestionScreen: "question",
+	LoadingScreen:  "loading",
+	ResultsScreen:  "results",
+}
+
+func (s Screen) String() string {
+	return screenName[s]
+}
+
 type Model struct {
 	TextInput textinput.Model
 	Err       error
-	Question  string
+	Screen    Screen
 }
 
 func InitialModel() Model {
@@ -40,7 +58,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyEnter:
-
+			fmt.Println(m.TextInput.Value())
 		}
 
 	case ErrMsg:
