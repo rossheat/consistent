@@ -33,11 +33,12 @@ func (s Route) String() string {
 }
 
 type Model struct {
-	TextInput  textinput.Model
-	Spinner    spinner.Model
-	Err        error
-	Route      Route
-	LLMResults LLMResults
+	TextInput       textinput.Model
+	Spinner         spinner.Model
+	Err             error
+	Route           Route
+	LLMResults      LLMResults
+	AnthropicAPIKey string
 }
 
 func InitialModel() Model {
@@ -58,19 +59,11 @@ func InitialModel() Model {
 
 func (m Model) CheckEnvVars() tea.Msg {
 
-	requiredEnvVars := []string{"AI_API_KEY", "MODEL_NAME"}
-	missingEnvVars := make([]string, 0)
-
-	for _, requiredEnvVar := range requiredEnvVars {
-		if os.Getenv(requiredEnvVar) == "" {
-			missingEnvVars = append(missingEnvVars, requiredEnvVar)
-		}
+	anthropicAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	if anthropicAPIKey == "" {
+		return fmt.Errorf("Missing ANTHROPIC_API_KEY environment variable.\nPlease set it in your shell this this: ANTHROPIC_API_KEY=<value>")
 	}
-
-	if len(missingEnvVars) > 0 {
-		return fmt.Errorf("missing required environment variables: %v\n\nPlease set them like this <ENV_VAR>=<VALUE> and try again.", missingEnvVars)
-	}
-
+	m.AnthropicAPIKey = anthropicAPIKey
 	return nil
 }
 
