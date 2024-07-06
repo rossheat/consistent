@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/NimbleMarkets/ntcharts/barchart"
@@ -55,8 +56,26 @@ func InitialModel() Model {
 	return Model{Err: nil, TextInput: ti, Route: QuestionRoute, Spinner: s}
 }
 
+func (m Model) CheckEnvVars() tea.Msg {
+
+	requiredEnvVars := []string{"AI_API_KEY", "MODEL_NAME"}
+	missingEnvVars := make([]string, 0)
+
+	for _, requiredEnvVar := range requiredEnvVars {
+		if os.Getenv(requiredEnvVar) == "" {
+			missingEnvVars = append(missingEnvVars, requiredEnvVar)
+		}
+	}
+
+	if len(missingEnvVars) > 0 {
+		return fmt.Errorf("missing required environment variables: %v\n\nPlease set them like this <ENV_VAR>=<VALUE> and try again.", missingEnvVars)
+	}
+
+	return nil
+}
+
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.Spinner.Tick, textinput.Blink)
+	return tea.Batch(m.CheckEnvVars, m.Spinner.Tick, textinput.Blink)
 }
 
 type LLMResults struct {
@@ -147,12 +166,12 @@ func (m Model) ResultsView() string {
 	d1 := barchart.BarData{
 		Label: fmt.Sprintf("Yes (%v)", m.LLMResults.yes),
 		Values: []barchart.BarValue{
-			{Name: "Item1", Value: float64(m.LLMResults.yes), Style: lipgloss.NewStyle().Foreground(lipgloss.Color("10"))}}, 
+			{Name: "Item1", Value: float64(m.LLMResults.yes), Style: lipgloss.NewStyle().Foreground(lipgloss.Color("10"))}},
 	}
 	d2 := barchart.BarData{
 		Label: fmt.Sprintf(" No (%v)", m.LLMResults.no),
 		Values: []barchart.BarValue{
-			{Name: "Item1", Value: float64(m.LLMResults.no), Style: lipgloss.NewStyle().Foreground(lipgloss.Color("9"))}}, 
+			{Name: "Item1", Value: float64(m.LLMResults.no), Style: lipgloss.NewStyle().Foreground(lipgloss.Color("9"))}},
 	}
 
 	bc := barchart.New(18, 10)
@@ -163,7 +182,7 @@ func (m Model) ResultsView() string {
 }
 
 func (m Model) ErrorView() string {
-	return fmt.Sprint("There's been an error:", "\n\n", m.Err, "\n\n", "(q to quit)")
+	return fmt.Sprint("Error: ", m.Err, "\n\n", "(q to quit)")
 }
 
 func main() {
