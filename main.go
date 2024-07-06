@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NimbleMarkets/ntcharts/barchart"
@@ -11,6 +16,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+const MODEL_NAME = "Claude Sonnet 3.5"
+const MODEL_INSTANCES = 50
 
 type ErrMsg error
 
@@ -78,9 +86,119 @@ type LLMResults struct {
 	no  int
 }
 
+type AnthropicReqMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type AnthropicReqBody struct {
+	Model     string                `json:"model"`
+	MaxTokens int                   `json:"max_tokens"`
+	Messages  []AnthropicReqMessage `json:"messages"`
+}
+
+type AnthropicRespBody struct {
+	Content []AnthropicRespBodyContent `json:"content"`
+}
+
+type AnthropicRespBodyContent struct {
+	Text string `json:"text"`
+}
+
+type AnthropicRespContentText struct {
+	Answer string `json:"answer"`
+}
+
+func SendMessage(m Model) (string, error) {
+
+	client := &http.Client{}
+
+	content := fmt.Sprintf("You MUST produce a correctly formatted JSON response to the following yes/no question '%v'. You can ONLY answer 'yes' or 'no'. If the 'question' is not a valid question or makes no sense, your response will be no. You MUST respond in the following JSON format: {'answer': <'yes'/'no'>}", m.TextInput.Value())
+
+	reqBody := AnthropicReqBody{
+		Model:     "claude-3-5-sonnet-20240620",
+		MaxTokens: 1024,
+		Messages: []AnthropicReqMessage{
+			{Role: "user", Content: content},
+		},
+	}
+
+	bs, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(bs))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("x-api-key", m.AnthropicAPIKey)
+	resp, err := client.Do(req)
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("response status code: %v", resp.StatusCode)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return "", err
+	}
+	var respBody AnthropicRespBody
+	json.Unmarshal(body, &respBody)
+
+	var respJSON AnthropicRespContentText
+	json.Unmarshal([]byte(respBody.Content[0].Text), &respJSON)
+
+	return respJSON.Answer, nil
+}
+
 func (m Model) AskQuestion() tea.Msg {
-	time.Sleep(time.Second * 1)
-	return LLMResults{yes: 68, no: 42}
+	r := LLMResults{yes: 0, no: 0}
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+	errChan := make(chan error, MODEL_INSTANCES)
+
+	for i := 0; i < MODEL_INSTANCES; i++ {
+		wg.Add(1)
+		time.Sleep(time.Millisecond * 500)
+		go func() {
+			defer wg.Done()
+			answer, err := SendMessage(m)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			mutex.Lock()
+			defer mutex.Unlock()
+			if answer == "yes" {
+				r.yes++
+			} else if answer == "no" {
+				r.no++
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
+		if err != nil {
+			return ErrMsg(fmt.Errorf("error from the Anthropic API: %v", err))
+		}
+	}
+
+	return r
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -148,7 +266,7 @@ func (m Model) View() string {
 
 func (m Model) QuestionView() string {
 	return fmt.Sprint(
-		"Ask the LLM a yes/no question:",
+		"Ask ", MODEL_NAME, " a yes/no question:",
 		"\n\n",
 		m.TextInput.View(),
 		"\n\n",
@@ -157,7 +275,7 @@ func (m Model) QuestionView() string {
 }
 
 func (m Model) LoadingView() string {
-	return fmt.Sprint("\n", m.Spinner.View(), "Asking the the LLM: ", m.TextInput.Value(), "\n\n", "(q to quit)")
+	return fmt.Sprint("\n", m.Spinner.View(), "Asking ", MODEL_INSTANCES, " instances of ", MODEL_NAME, ":\n\"", m.TextInput.Value(), "\"\n\n", "(q to quit)")
 }
 
 func (m Model) ResultsView() string {
@@ -177,7 +295,7 @@ func (m Model) ResultsView() string {
 	bc.PushAll([]barchart.BarData{d1, d2})
 	bc.Draw()
 
-	return fmt.Sprint(m.AnthropicAPIKey, "\n", m.TextInput.Value(), "\n\n", bc.View(), "\n\n", "(r to reset, q to quit)")
+	return fmt.Sprint("\n", m.TextInput.Value(), "\n\n", bc.View(), "\n\n", "(r to reset, q to quit)")
 }
 
 func (m Model) ErrorView() string {
@@ -185,6 +303,16 @@ func (m Model) ErrorView() string {
 }
 
 func main() {
+
+	if len(os.Getenv("DEBUG")) > 0 {
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+	}
+
 	program := tea.NewProgram(InitialModel())
 	if _, err := program.Run(); err != nil {
 		panic(fmt.Sprintf("Error returned from Run: %v", err))
