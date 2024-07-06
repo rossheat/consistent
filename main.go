@@ -58,13 +58,13 @@ func (m Model) Init() tea.Cmd {
 }
 
 type LLMResults struct {
-	yesCount int
-	noCount  int
+	yes int
+	no  int
 }
 
 func (m Model) AskQuestion() tea.Msg {
 	time.Sleep(time.Second * 5)
-	return LLMResults{}
+	return LLMResults{yes: 68, no: 42}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -108,6 +108,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 
+	if m.Err != nil {
+		return m.ErrorView()
+	}
+
 	switch m.Route {
 	case QuestionRoute:
 		return m.QuestionView()
@@ -136,6 +140,10 @@ func (m Model) LoadingView() string {
 
 func (m Model) ResultsView() string {
 	return fmt.Sprint("Results: y:20, n:10", "\n\n", "(r to reset, q to quit)")
+}
+
+func (m Model) ErrorView() string {
+	return fmt.Sprint("There's been an error:", "\n\n", m.Err, "\n\n", "(q to quit)")
 }
 
 func main() {
