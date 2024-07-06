@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NimbleMarkets/ntcharts/barchart"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,10 +32,11 @@ func (s Route) String() string {
 }
 
 type Model struct {
-	TextInput textinput.Model
-	Spinner   spinner.Model
-	Err       error
-	Route     Route
+	TextInput  textinput.Model
+	Spinner    spinner.Model
+	Err        error
+	Route      Route
+	LLMResults LLMResults
 }
 
 func InitialModel() Model {
@@ -63,7 +65,7 @@ type LLMResults struct {
 }
 
 func (m Model) AskQuestion() tea.Msg {
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 1)
 	return LLMResults{yes: 68, no: 42}
 }
 
@@ -72,12 +74,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
+	case ErrMsg:
+		m.Err = msg
+		return m, nil
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.Spinner, cmd = m.Spinner.Update(msg)
 		return m, cmd
 
 	case LLMResults:
+		m.LLMResults = msg
 		m.Route = ResultsRoute
 		return m, nil
 
@@ -97,9 +104,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-	case ErrMsg:
-		m.Err = msg
-		return m, nil
 	}
 
 	m.TextInput, cmd = m.TextInput.Update(msg)
@@ -139,7 +143,23 @@ func (m Model) LoadingView() string {
 }
 
 func (m Model) ResultsView() string {
-	return fmt.Sprint("Results: y:20, n:10", "\n\n", "(r to reset, q to quit)")
+
+	d1 := barchart.BarData{
+		Label: fmt.Sprintf("Yes (%v)", m.LLMResults.yes),
+		Values: []barchart.BarValue{
+			{Name: "Item1", Value: float64(m.LLMResults.yes), Style: lipgloss.NewStyle().Foreground(lipgloss.Color("10"))}}, 
+	}
+	d2 := barchart.BarData{
+		Label: fmt.Sprintf(" No (%v)", m.LLMResults.no),
+		Values: []barchart.BarValue{
+			{Name: "Item1", Value: float64(m.LLMResults.no), Style: lipgloss.NewStyle().Foreground(lipgloss.Color("9"))}}, 
+	}
+
+	bc := barchart.New(18, 10)
+	bc.PushAll([]barchart.BarData{d1, d2})
+	bc.Draw()
+
+	return fmt.Sprint("\n", m.TextInput.Value(), "\n\n", bc.View(), "\n\n", "(r to reset, q to quit)")
 }
 
 func (m Model) ErrorView() string {
