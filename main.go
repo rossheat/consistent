@@ -3,15 +3,26 @@ package main
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/textinput"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type ErrMsg error
+
 type Model struct {
-	placeholder string
+	TextInput textinput.Model
+	Err       error
 }
 
 func InitialModel() Model {
-	return Model{placeholder: "Placeholder value"}
+	ti := textinput.New()
+	ti.Placeholder = "Is the square root of 441 greater than 20?"
+	ti.Focus()
+	ti.CharLimit = 256
+	ti.Width = 50
+
+	return Model{Err: nil, TextInput: ti}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -19,21 +30,31 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
+
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 		}
+
+	case ErrMsg:
+		m.Err = msg
+		return m, nil
 	}
-	return m, nil
+
+	m.TextInput, cmd = m.TextInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) View() string {
-	s := "Example view\n"
-	s += fmt.Sprintf("\n%v\n", m.placeholder)
-	s += "\nPress 'q' to quit.\n"
-	return s
+	return fmt.Sprintf(
+		"Ask the LLM a yes/no question:\n\n%v\n\n%v",
+		m.TextInput.View(),
+		"(esc to quit)",
+	) + "\n"
 }
 
 func main() {
