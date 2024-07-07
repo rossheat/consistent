@@ -1,4 +1,4 @@
-module github.com/rossheat/consensus
+module github.com/rossheat/consistent
 
 go 1.22.4
 
