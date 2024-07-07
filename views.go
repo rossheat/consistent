@@ -27,16 +27,17 @@ func (m Model) View() string {
 
 func (m Model) QuestionView() string {
 	return fmt.Sprint(
+		"\n",
 		"Ask ", config.model, " a yes/no question:",
 		"\n\n",
 		m.TextInput.View(),
 		"\n\n",
-		"(q to quit)",
+		"(esc to quit)",
 	) + "\n"
 }
 
 func (m Model) LoadingView() string {
-	return fmt.Sprint("\n", m.Spinner.View(), "Asking ", config.instances, " instances of ", config.model, ":\n\"", m.TextInput.Value(), "\"\n\n", "(q to quit)")
+	return fmt.Sprint("\n", m.Spinner.View(), "Asking ", config.instances, " instances of ", config.model, ":\n\n\"", m.TextInput.Value(), "\"\n\n", "(esc to quit)")
 }
 
 func (m Model) ResultsView() string {
@@ -56,9 +57,9 @@ func (m Model) ResultsView() string {
 	bc.PushAll([]barchart.BarData{d1, d2})
 	bc.Draw()
 
-	return fmt.Sprint("\n", m.TextInput.Value(), "\n\n", bc.View(), "\n\n", "(r to reset, q to quit)")
+	return fmt.Sprint("\n", m.TextInput.Value(), "\n\n", bc.View(), "\n\n", "(r to reset, esc to quit)")
 }
 
 func (m Model) ErrorView() string {
-	return fmt.Sprint("Error: ", m.Err, "\n\n", "(q to quit)")
+	return fmt.Sprint("Error: ", m.Err, "\n\n", "(esc to quit)")
 }

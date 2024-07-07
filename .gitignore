@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/go,macos,dotenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=go,macos,dotenv
 debug.log
+consistent
+demo.mov
+demo.mp4
 
 ### dotenv ###
 .env

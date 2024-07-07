@@ -18,10 +18,10 @@ type Model struct {
 func InitialModel() Model {
 	// TextInput
 	ti := textinput.New()
-	ti.Placeholder = "Is the square root of 441 greater than 20?"
+	ti.Placeholder = "Can a set contain itself as an element?"
 	ti.Focus()
 	ti.CharLimit = 256
-	ti.Width = 50
+	ti.Width = 110
 
 	// Spinner
 	s := spinner.New()
