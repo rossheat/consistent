@@ -27,6 +27,7 @@ func (m Model) View() string {
 
 func (m Model) QuestionView() string {
 	return fmt.Sprint(
+		"\n",
 		"Ask ", config.model, " a yes/no question:",
 		"\n\n",
 		m.TextInput.View(),
@@ -36,7 +37,7 @@ func (m Model) QuestionView() string {
 }
 
 func (m Model) LoadingView() string {
-	return fmt.Sprint("\n", m.Spinner.View(), "Asking ", config.instances, " instances of ", config.model, ":\n\"", m.TextInput.Value(), "\"\n\n", "(q to quit)")
+	return fmt.Sprint("\n", m.Spinner.View(), "Asking ", config.instances, " instances of ", config.model, ":\n\n\"", m.TextInput.Value(), "\"\n\n", "(q to quit)")
 }
 
 func (m Model) ResultsView() string {

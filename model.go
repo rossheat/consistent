@@ -21,7 +21,7 @@ func InitialModel() Model {
 	ti.Placeholder = "Is the square root of 441 greater than 20?"
 	ti.Focus()
 	ti.CharLimit = 256
-	ti.Width = 50
+	ti.Width = 110
 
 	// Spinner
 	s := spinner.New()
