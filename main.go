@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,12 +18,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const MODEL_NAME = "Claude Sonnet 3.5"
-const MODEL_INSTANCES = 50
-
 type ErrMsg error
-
 type Route int
+
+var config Config
 
 const (
 	QuestionRoute = iota
@@ -65,20 +64,8 @@ func InitialModel() Model {
 	return Model{Err: nil, TextInput: ti, Route: QuestionRoute, Spinner: s}
 }
 
-type AnthropicAPIKey struct {
-	value string
-}
-
-func (m *Model) LoadEnvVars() tea.Msg {
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	if apiKey == "" {
-		return fmt.Errorf("missing ANTHROPIC_API_KEY environment variable.\nPlease set it in your shell like this: ANTHROPIC_API_KEY=<value>")
-	}
-	return AnthropicAPIKey{apiKey}
-}
-
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.LoadEnvVars, m.Spinner.Tick, textinput.Blink)
+	return tea.Batch(m.Spinner.Tick, textinput.Blink)
 }
 
 type LLMResults struct {
@@ -116,7 +103,7 @@ func SendMessage(m Model) (string, error) {
 	content := fmt.Sprintf("You MUST produce a correctly formatted JSON response to the following yes/no question '%v'. You can ONLY answer 'yes' or 'no'. If the 'question' is not a valid question or makes no sense, your response will be no. You MUST respond in the following JSON format: {'answer': <'yes'/'no'>}", m.TextInput.Value())
 
 	reqBody := AnthropicReqBody{
-		Model:     "claude-3-5-sonnet-20240620",
+		Model:     config.model,
 		MaxTokens: 1024,
 		Messages: []AnthropicReqMessage{
 			{Role: "user", Content: content},
@@ -135,24 +122,24 @@ func SendMessage(m Model) (string, error) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("x-api-key", m.AnthropicAPIKey)
+	req.Header.Set("x-api-key", config.key)
 	resp, err := client.Do(req)
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("response status code: %v", resp.StatusCode)
-	}
 
 	if err != nil {
 		return "", err
 	}
 
-	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("request failed with status code %v", resp.StatusCode)
+	}
 
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
 		return "", err
 	}
+
 	var respBody AnthropicRespBody
 	json.Unmarshal(body, &respBody)
 
@@ -164,13 +151,15 @@ func SendMessage(m Model) (string, error) {
 
 func (m Model) AskQuestion() tea.Msg {
 	r := LLMResults{yes: 0, no: 0}
+
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
-	errChan := make(chan error, MODEL_INSTANCES)
 
-	for i := 0; i < MODEL_INSTANCES; i++ {
+	errChan := make(chan error, config.instances)
+
+	for i := 0; i < config.instances; i++ {
 		wg.Add(1)
-		time.Sleep(time.Millisecond * 500)
+		time.Sleep(time.Millisecond * time.Duration(config.delay))
 		go func() {
 			defer wg.Done()
 			answer, err := SendMessage(m)
@@ -220,10 +209,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Route = ResultsRoute
 		return m, nil
 
-	case AnthropicAPIKey:
-		m.AnthropicAPIKey = msg.value
-		return m, nil
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q":
@@ -266,7 +251,7 @@ func (m Model) View() string {
 
 func (m Model) QuestionView() string {
 	return fmt.Sprint(
-		"Ask ", MODEL_NAME, " a yes/no question:",
+		"Ask ", config.model, " a yes/no question:",
 		"\n\n",
 		m.TextInput.View(),
 		"\n\n",
@@ -275,7 +260,7 @@ func (m Model) QuestionView() string {
 }
 
 func (m Model) LoadingView() string {
-	return fmt.Sprint("\n", m.Spinner.View(), "Asking ", MODEL_INSTANCES, " instances of ", MODEL_NAME, ":\n\"", m.TextInput.Value(), "\"\n\n", "(q to quit)")
+	return fmt.Sprint("\n", m.Spinner.View(), "Asking ", config.instances, " instances of ", config.model, ":\n\"", m.TextInput.Value(), "\"\n\n", "(q to quit)")
 }
 
 func (m Model) ResultsView() string {
@@ -302,9 +287,31 @@ func (m Model) ErrorView() string {
 	return fmt.Sprint("Error: ", m.Err, "\n\n", "(q to quit)")
 }
 
-func main() {
+type Config struct {
+	key       string
+	debug     bool
+	model     string
+	instances int
+	delay     int
+}
 
-	if len(os.Getenv("DEBUG")) > 0 {
+func main() {
+	key := flag.String("key", "", "Your Anthropic API key")
+	debug := flag.Bool("debug", false, "Start the progrom in debug mode")
+	model := flag.String("model", "claude-3-5-sonnet-20240620", "The name of the Anthropic model you'd like to question")
+	instances := flag.Int("instances", 50, "The number times your question is sent to the model API")
+	delay := flag.Int("delay", 500, "Milliseconds of delay between calling the Anthropic API")
+
+	flag.Parse()
+
+	if *key == "" {
+		fmt.Println("Please provide your Anthropic API key")
+		os.Exit(1)
+	}
+
+	config = Config{key: *key, debug: *debug, model: *model, instances: *instances, delay: *delay}
+
+	if config.debug {
 		f, err := tea.LogToFile("debug.log", "debug")
 		if err != nil {
 			fmt.Println("fatal:", err)
